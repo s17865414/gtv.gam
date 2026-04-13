@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini GTA 5 - Browser Edition</title>
+    <style>
+        body { margin:0; background:#000; overflow:hidden; font-family:Arial; }
+        canvas { display:block; margin:0 auto; background:#222; }
+        #info { position:absolute; top:10px; left:10px; color:white; font-size:18px; text-shadow:0 0 5px black; }
+    </style>
+</head>
+<body>
+    <div id="info">Mini GTA 5<br>WASD - Move | Space - Shoot | V - Vehicle Mode | Enter - Dance (घर में)</div>
+    <canvas id="game"></canvas>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+
+        let player = { x: 400, y: 300, size: 20, speed: 4, angle: 0, mode: 'walk', health: 100 };
+        let bullets = [];
+        let npcs = [];
+        let particles = [];
+        let dancing = false;
+        let keys = {};
+
+        // NPCs बनाओ
+        for(let i = 0; i < 8; i++) {
+            npcs.push({
+                x: Math.random()*700 + 50,
+                y: Math.random()*500 + 50,
+                size: 18,
+                speed: 1.5,
+                color: '#f44'
+            });
+        }
+
+        // कीबोर्ड हैंडलिंग
+        window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+        // माउस शूटिंग
+        canvas.addEventListener('click', (e) => {
+            if (player.mode === 'walk') {
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                const dx = mx - player.x;
+                const dy = my - player.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                bullets.push({
+                    x: player.x, y: player.y,
+                    vx: (dx/dist)*12,
+                    vy: (dy/dist)*12
+                });
+            }
+        });
+
+        function update() {
+            // प्लेयर मूवमेंट
+            if (keys['w'] || keys['arrowup']) player.y -= player.speed;
+            if (keys['s'] || keys['arrowdown']) player.y += player.speed;
+            if (keys['a'] || keys['arrowleft']) player.x -= player.speed;
+            if (keys['d'] || keys['arrowright']) player.x += player.speed;
+
+            // व्हीकल मोड (V दबाओ)
+            if (keys['v']) {
+                player.mode = player.mode === 'walk' ? 'vehicle' : 'walk';
+                player.speed = player.mode === 'vehicle' ? 8 : 4;
+                keys['v'] = false;
+            }
+
+            // शूटिंग (स्पेस)
+            if (keys[' '] && player.mode === 'walk') {
+                // ऑटो शूट सिंपल
+            }
+
+            // डांस मोड (Enter जब घर के पास)
+            if (keys['enter'] && player.x > 600 && player.y > 400) {
+                dancing = true;
+                setTimeout(() => dancing = false, 2000);
+                keys['enter'] = false;
+            }
+
+            // बाउंड्री
+            player.x = Math.max(20, Math.min(canvas.width-20, player.x));
+            player.y = Math.max(20, Math.min(canvas.height-20, player.y));
+
+            // बुलेट्स अपडेट
+            for(let i = bullets.length-1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    bullets.splice(i,1);
+                }
+            }
+
+            // NPCs सिंपल AI + कोलाइजन
+            npcs.forEach(npc => {
+                // रैंडम मूव
+                npc.x += (Math.random()-0.5)*npc.speed*2;
+                npc.y += (Math.random()-0.5)*npc.speed*2;
+
+                // शूटिंग से मारो
+                for(let i = bullets.length-1; i >= 0; i--) {
+                    let b = bullets[i];
+                    let dx = b.x - npc.x;
+                    let dy = b.y - npc.y;
+                    if (Math.sqrt(dx*dx + dy*dy) < 20) {
+                        // मार गया
+                        particles.push({x: npc.x, y: npc.y, life: 30});
+                        npcs.splice(npcs.indexOf(npc), 1);
+                        bullets.splice(i,1);
+                        // नया NPC स्पॉन
+                        npcs.push({x: Math.random()*700+50, y: Math.random()*500+50, size:18, speed:1.5, color:'#f44'});
+                        break;
+                    }
+                }
+            });
+
+            // पार्टिकल्स (खून/धुआं)
+            for(let i = particles.length-1; i >= 0; i--) {
+                particles[i].life--;
+                if (particles[i].life <= 0) particles.splice(i,1);
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#0a3'; // ग्रास बैकग्राउंड
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+
+            // सड़क
+            ctx.fillStyle = '#555';
+            ctx.fillRect(100, 200, 600, 200);
+
+            // घर (डांस एरिया)
+            ctx.fillStyle = '#833';
+            ctx.fillRect(620, 420, 150, 120);
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.fillText('🏠', 670, 480);
+
+            // NPCs
+            npcs.forEach(npc => {
+                ctx.fillStyle = npc.color;
+                ctx.fillRect(npc.x - npc.size/2, npc.y - npc.size/2, npc.size, npc.size);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(npc.x - 5, npc.y - 8, 10, 5); // सिर
+            });
+
+            // प्लेयर (रियलिस्टिक जैसा)
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle);
+            ctx.fillStyle = player.mode === 'vehicle' ? '#08f' : '#f80'; // गाड़ी या आदमी कलर
+            ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
+
+            // सिर (सेल्फी स्टाइल)
+            ctx.fillStyle = '#fdb';
+            ctx.fillRect(-8, -18, 16, 12);
+
+            if (dancing) {
+                ctx.fillStyle = '#ff0';
+                ctx.fillText('💃', -10, -30);
+            }
+            ctx.restore();
+
+            // बुलेट्स
+            ctx.fillStyle = '#ff0';
+            bullets.forEach(b => {
+                ctx.fillRect(b.x-3, b.y-3, 6, 6);
+            });
+
+            // पार्टिकल्स
+            ctx.fillStyle = '#f00';
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life/30;
+                ctx.fillRect(p.x, p.y, 8, 8);
+            });
+            ctx.globalAlpha = 1;
+
+            // टेक्स्ट
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.fillText(player.mode === 'vehicle' ? '🚗 बाइक/गाड़ी मोड' : '🚶 वॉकिंग मोड', 20, 50);
+            if (dancing) ctx.fillText('नाच रहा है! 🔥', 300, 100);
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>
